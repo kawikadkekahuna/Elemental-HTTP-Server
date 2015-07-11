@@ -6,6 +6,9 @@ var Method = {
   GET: 'GET',
   POST: 'POST'
 }
+var PUBLIC_DIR = './public/';
+var ELEMENT_DIR = './public/elements/';
+
 var postDataKey = {
   elementName: '',
   elementSymbol: '',
@@ -47,7 +50,22 @@ function handleRequest(request, response) {
 
 
       var postData = generatePOSTData(data);
+      var atomicElementHTML = createHTML(postData.elementName, postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
+      fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
+        if (!exists) {
+          fs.writeFile(ELEMENT_DIR + postData.filename, atomicElementHTML, function(err) {
+            if (err) {
+              response.write('err');
+              response.end();
+            } else {
+              writeFileSuccess(response);
+              response.end();
+            }
 
+          });
+
+        }
+      });
 
     });
 
@@ -61,8 +79,23 @@ function handleRequest(request, response) {
  * 
  */
 
+function writeFileSuccess(response) {
+  var headResponse = {
+    http_server_status: 'HTTP/1.1'+http.STATUS_CODES[200],
+    content_type: 'Content-Type:  application/json; charset=utf-8'
+  }
+  for(var key in headResponse){
+    response.write(headResponse[key]);
+  }
+  response.write('success:true');
+
+
+
+
+}
 
 function generatePOSTData(data) {
+  fs.stat
   var postData = querystring.parse(data.toString());
   //Validates POST input.  If none match postDataKey, throw error
   var counter = 0;
@@ -72,14 +105,33 @@ function generatePOSTData(data) {
     }
     counter++;
   }
+  postData.filename = postData.elementName + '.html';
+  ////////////////////////////////////////////////////////////////////
+  return postData;
 
 }
 
 
-function htmlTemplate(elementName, elementSymbol, elementAtomicNumber, elementDescription) {
-var generatedHTML = "<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <title>The Elements - Boron</title> <link rel="stylesheet" href="/css/styles.css"> </head> <body> <h1>Boron</h1> <h2>B</h2> <h3>Atomic number 5</h3> <p>Boron is a chemical element with symbol B and atomic number 5. Because boron is produced entirely by cosmic ray spallation and not by stellar nucleosynthesis it is a low-abundance element in both the Solar system and the Earth's crust.[12] Boron is concentrated on Earth by the water-solubility of its more common naturally occurring compounds, the borate minerals. These are mined industrially as evaporites, such as borax and kernite. The largest proven boron deposits are in Turkey, which is also the largest producer of boron minerals.</p> <p><a href="/">back</a></p> </body> </html>";
 
-return generatedHTML;
+function createHTML(elementName, elementSymbol, elementAtomicNumber, elementDescription) {
+  var generatedHTML = '<!DOCTYPE html>\
+<html lang="en">\
+<head>\
+  <meta charset="UTF-8">\
+  <title>The Elements - ' + elementName + '</title>\
+  <link rel="stylesheet" href="/css/styles.css">\
+</head>\
+<body>\
+  <h1>' + elementName + '</h1>\
+  <h2>' + elementSymbol + '</h2>\
+  <h3>' + elementAtomicNumber + '</h3>\
+  <p>' + elementDescription + '</p>\
+  <p><a href="/">back</a></p>\
+</body>\
+</html>\
+';
+
+  return generatedHTML;
 
 }
 
