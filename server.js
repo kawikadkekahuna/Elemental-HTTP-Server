@@ -80,16 +80,10 @@ function handleRequest(request, response) {
  */
 
 function writeFileSuccess(response) {
-  var headResponse = {
-    http_server_status: 'HTTP/1.1'+http.STATUS_CODES[200],
-    content_type: 'Content-Type:  application/json; charset=utf-8'
-  }
-  for(var key in headResponse){
-    response.write(headResponse[key]);
-  }
+  response.writeHead(200, {
+    'Content-Type': 'application/json'
+  });
   response.write('success:true');
-
-
 
 
 }
