@@ -74,17 +74,19 @@ function handleRequest(request, response) {
     request.on('data', function(data) {
 
       var postData = generatePOSTData(data);
-      var toAppendHTML = createHTMLElements(postData);
-       console.log('toAppendHTML',toAppendHTML); 
+      var header = createHTMLHeader(postData.elementName);
+      var body = createHTMLBody(postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
+      var newHTML = createHTML(header, body);
+       console.log('newHTML',newHTML); 
       fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
         if (!exists) {
-          fs.writeFile(ELEMENT_DIR + postData.filename, toAppendHTML, function(err) {
+          fs.writeFile(ELEMENT_DIR + postData.filename, newHTML, function(err) {
             if (err) {
               response.write('err');
               response.end();
             } else {
               writeFileSuccess(response);
-              renderHomepage(postData);
+              renderHomepage(newHTML);
               response.end();
             }
 
@@ -104,7 +106,7 @@ function handleRequest(request, response) {
  * Create an HTML template that could be easily dynamic.
  * 
  */
-function renderHomepage(postData) {
+function renderHomepage(newHTML) {
   var newElement = '<li><a href="/helium.html">Helium</li>';
   var buffer = new Buffer(newElement);
   // fs.readFile(PUBLIC_DIR+'index.html',function(err,data){
@@ -113,7 +115,7 @@ function renderHomepage(postData) {
 
   fs.open(PUBLIC_DIR + 'index.html', 'r+', function(err, fd) {
 
-    fs.write(fd, buffer, 0, buffer.length, 315, function(err) {
+    fs.write(fd, buffer, 0, buffer.length, 0, function(err) {
       if (err) throw err;
 
       fs.close(fd, function() {
@@ -149,33 +151,34 @@ function generatePOSTData(data) {
 
 }
 
-function createHTMLElements(postData) {
-  ####SEPERATE tags into new functions and jsut have createhtml as the only function being called  
-  var header =  '<head>\
+
+
+function createHTMLHeader(elementName) {
+  var header = '<head>\
   <meta charset="UTF-8">\
-  <title>The Elements - ' + postData.elementName + '</title>\
+  <title>The Elements - ' + elementName + '</title>\
   <link rel="stylesheeeeeeet" href="/css/styles.css">\
 </head>';
+  return header;
+}
 
+function createHTMLBody(elementName, elementSymbol, elementAtomicNumber, elementDescription) {
   var body = '<body>\
-  <h1>' + postData.elementName + '</h1>\
-  <h2>' + postData.elementSymbol + '</h2>\
-  <h3>' + postData.elementAtomicNumber + '</h3>\
-  <p>' + postData.elementDescription + '</p>\
+  <h1>' + elementName + '</h1>\
+  <h2>' + elementSymbol + '</h2>\
+  <h3>' + elementAtomicNumber + '</h3>\
+  <p>' + elementDescription + '</p>\
   <p><a href="/">back</a></p>\
 </body>';
-
-
-
-
+  return body;
 }
 
 
-function createHTML(postData) {
-createHTMLElements(header,body);
+
+function createHTML(header,body) {
   var generatedHTML = '<!DOCTYPE html>\
-  '+header+'\
-  '+body+'\
+  ' + header + '\
+  ' + body + '\
 <html lang="en">\
  < /html>\
   ';
