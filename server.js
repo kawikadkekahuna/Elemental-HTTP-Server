@@ -7,7 +7,9 @@ var PeriodicElements = {};
 var Method = {
   GET: 'GET',
   POST: 'POST',
-  HEAD: 'HEAD'
+  HEAD: 'HEAD',
+  PUT: 'PUT',
+  DELETE: 'DELETE'
 }
 var PUBLIC_DIR = './public/';
 var ELEMENT_DIR = './public/elements/';
@@ -24,11 +26,11 @@ var server = http.createServer(handleRequest);
 
 
 function handleRequest(request, response) {
+  var uri = request.url;
+  if (uri === '/') {
+    uri = 'index.html';
+  }
   if ([Method.GET, Method.HEAD].indexOf(request.method) >= 0) {
-    var uri = request.url;
-    if (uri === '/') {
-      uri = 'index.html';
-    }
 
     fs.exists(PUBLIC_DIR + uri, function(exists) {
 
@@ -80,7 +82,6 @@ function handleRequest(request, response) {
       var header = createHTMLHeader(postData.elementName);
       var body = createHTMLBody(postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
       var newHTML = createHTML(header, body);
-      console.log('newHTML', newHTML);
       fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
         if (!exists) {
           fs.writeFile(ELEMENT_DIR + postData.filename, newHTML, function(err) {
@@ -101,6 +102,35 @@ function handleRequest(request, response) {
     });
 
 
+  }
+
+  if (request.method === Method.PUT) {
+    request.on('data', function(data) {
+      fs.exists(PUBLIC_DIR + uri, function(exists) {
+        if (exists) {
+          var parsedData = querystring.parse(data.toString());
+          var header = createHTMLHeader(parsedData.elementName);
+          var body = createHTMLBody(parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
+          var newHTML = createHTML(header, body);
+          var buffer = new Buffer(newHTML);
+
+          fs.open(PUBLIC_DIR + uri, 'w+', function(err, fd) {
+
+            fs.write(fd, buffer, 0, buffer.length, null, function(err) {
+              if (err) throw err;
+
+              fs.close(fd, function() {
+                console.log('done writing');
+              });
+            });
+
+          });
+        }
+      });
+
+
+
+    });
   }
 
 }
@@ -129,7 +159,7 @@ function renderHomepage(postData) {
       fs.close(fd, function() {
         console.log('done writing');
       });
-    })
+    });
 
   });
 }
@@ -154,7 +184,7 @@ function generatePOSTData(data) {
     counter++;
   }
   postData.filename = postData.elementName + '.html';
-  ////////////////////////////////////////////////////////////////////
+
   return postData;
 
 }
@@ -213,23 +243,20 @@ function createIndexHeader() {
 
 function createIndexBody(newElement) {
 
-  console.log('newElement', newElement);
-
-  var body = '<li>\
-    <a href ="/hydrogen.html"> Hydrogen</a></li>' +
+  var preExistingElements = '';
+  var body = '<li><a href ="/hydrogen.html">Hydrogen</a></li>' +
     '<li><a href="/helium.html"> Helium </a></li>';
 
 
-  var endBody = '</body>\
-</html>';
 
-  var preExistingElements = '';
+  var endBody = '</body>\
+  </html>';
+
   for (var key in PeriodicElements) {
     preExistingElements += PeriodicElements[key];
+
   }
-  console.log('body', body);
   body = body + preExistingElements + endBody;
-  // console.log('body',body); 
   return body;
 
 }
