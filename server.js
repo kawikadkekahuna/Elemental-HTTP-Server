@@ -12,9 +12,10 @@ var Method = {
   DELETE: 'DELETE'
 }
 var PUBLIC_DIR = './public/';
-var ELEMENT_DIR = './public/elements';
+var ELEMENT_DIR = './public/elements/';
 var ELEMENT_COUNT = (2 + Object.keys(PeriodicElements).length) || 2;
-
+var ERR_NO_FILE_FOUND = 'no file found';
+var ERR_INVALID_PUT_KEY = 'invalid put key'
 var DataKey = {
   elementName: '',
   elementSymbol: '',
@@ -112,8 +113,9 @@ function handleRequest(request, response) {
           var keys = Object.keys(DataKey);
           for (var i = 0; i < keys.length; i++) {
             if (!(keys[i] in parsedData)) {
-              writeFileFail(response);
+              writeFileFail(response, ERR_INVALID_PUT_KEY, uri);
               response.end();
+              return;
 
             }
           }
@@ -129,6 +131,7 @@ function handleRequest(request, response) {
               if (err) throw err;
 
               fs.close(fd, function() {
+                writeFileSuccess(response);
                 console.log('done writing to ' + ELEMENT_DIR + uri);
 
                 response.end();
@@ -137,7 +140,7 @@ function handleRequest(request, response) {
 
           });
         } else {
-          console.log('no data');
+          writeFileFail(response, ERR_NO_FILE_FOUND, uri);
           response.end();
         }
       });
@@ -180,16 +183,36 @@ function renderHomepage(postData) {
 
 function writeFileSuccess(response) {
   response.writeHead(200, {
-    'Content-Type': 'text/html'
+    'Content-Type': 'application/json'
   });
-  response.write('success:true');
+  var res = {
+    success: true
+  }
+
+  response.write(JSON.stringify(res));
 }
 
-function writeFileFail(response) {
+function writeFileFail(response, code, uri) {
   response.writeHead(500, {
     'Content-Type': 'application/json'
   });
-  response.write('success:error');
+  var res;
+  switch (code) {
+
+    case ERR_INVALID_PUT_KEY:
+      res = {
+        error: 'invalid Keys in PUT request'
+      }
+      break;
+
+    case ERR_NO_FILE_FOUND:
+      res = {
+        error: uri + ' was not found'
+      }
+      break;
+
+  }
+  response.write(JSON.stringify(res));
 }
 
 function generatePOSTData(data) {
@@ -253,7 +276,7 @@ function createIndexHeader() {
 <body>\
   <h1>The Elements</h1>\
   <h2>These are all the known elements.</h2>\
-  <h3>There are ' + ELEMENT_COUNT++ + ' elements</h3>\
+  <h3>There are ' + ELEMENT_COUNT + ' elements</h3>\
   <ol>';
 
   return header;
