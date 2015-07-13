@@ -3,7 +3,7 @@ var HTTP_PAGE_404 = './public/404.html';
 var fs = require('fs');
 var querystring = require('querystring');
 var PORT = 8080;
-var PeriodicElements = require('./PeriodicTable.js');
+var PeriodicElements = require('./PeriodicTable.js').PeriodicElements;
 var Method = {
   GET: 'GET',
   POST: 'POST',
@@ -80,7 +80,7 @@ function handleRequest(request, response) {
 
       var postData = generatePOSTData(data);
       var header = createHTMLHeader(postData.elementName);
-      var body = createHTMLBody(postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
+      var body = createHTMLBody(postData.elementName,postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
       var newHTML = createHTML(header, body);
       fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
         if (!exists) {
@@ -110,7 +110,7 @@ function handleRequest(request, response) {
         if (exists) {
           var parsedData = querystring.parse(data.toString());
           var header = createHTMLHeader(parsedData.elementName);
-          var body = createHTMLBody(parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
+          var body = createHTMLBody(parsedData.elementName,parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
           var newHTML = createHTML(header, body);
           var buffer = new Buffer(newHTML);
 
@@ -144,7 +144,6 @@ function renderHomepage(postData) {
   var newPeriodicElement = '<li><a href="/elements/' + postData.filename + '">' + postData.elementName + '</li>';
   PeriodicElements[postData.filename] = newPeriodicElement;
   savePeriodicTable(PeriodicElements);
-  // console.log('PeriodicElements', PeriodicElements);
   var indexHTMLBody = createIndexBody(newPeriodicElement);
   var newIndexHTML = indexHTMLHeader + indexHTMLBody;
   var buffer = new Buffer(newIndexHTML);
@@ -202,6 +201,7 @@ function createHTMLHeader(elementName) {
 }
 
 function createHTMLBody(elementName, elementSymbol, elementAtomicNumber, elementDescription) {
+   console.log('elementName',elementName); 
   var body = '<body>\
   <h1>' + elementName + '</h1>\
   <h2>' + elementSymbol + '</h2>\
@@ -226,7 +226,7 @@ function createHTML(header, body) {
 
 function createIndexHeader() {
   var header = '<!DOCTYPE html>\
-<html lang="en">\savePeriodicTablesavePeriodicTable
+<html lang="en">\
 <head>\
   <meta charset="UTF-8">\
   <title>The Elements</title>\
@@ -262,15 +262,15 @@ function createIndexBody(newElement) {
 
 }
 
-function savePeriodicTable`(table) {
+function savePeriodicTable(table) {
   fs.open('PeriodicTable.js', 'w+', function(err, fd) {
-    console.log(fd);
-
+    var toBuffer = 'module.exports.PeriodicElements =' + JSON.stringify(PeriodicElements);
+    var buffer = new Buffer(toBuffer);
     fs.write(fd, buffer, 0, buffer.length, null, function(err) {
       if (err) throw err;
 
       fs.close(fd, function() {
-        console.log('done writing');
+        console.log('table done writing');
       });
     });
 

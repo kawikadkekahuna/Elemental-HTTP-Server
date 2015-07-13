@@ -1,7 +1,1 @@
-exports.PeriodicTable = {
-
-key :'value'
-
-
-  
-}
+module.exports.PeriodicElements ={"Lithium.html":"<li><a href=\"/elements/Lithium.html\">Lithium</li>"}
