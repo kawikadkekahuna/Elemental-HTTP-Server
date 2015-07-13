@@ -12,10 +12,10 @@ var Method = {
   DELETE: 'DELETE'
 }
 var PUBLIC_DIR = './public/';
-var ELEMENT_DIR = './public/elements/';
-var ELEMENT_COUNT = 2;
+var ELEMENT_DIR = './public/elements';
+var ELEMENT_COUNT = (2 + Object.keys(PeriodicElements).length) || 2;
 
-var postDataKey = {
+var DataKey = {
   elementName: '',
   elementSymbol: '',
   elementAtomicNumber: '',
@@ -80,7 +80,7 @@ function handleRequest(request, response) {
 
       var postData = generatePOSTData(data);
       var header = createHTMLHeader(postData.elementName);
-      var body = createHTMLBody(postData.elementName,postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
+      var body = createHTMLBody(postData.elementName, postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
       var newHTML = createHTML(header, body);
       fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
         if (!exists) {
@@ -106,25 +106,39 @@ function handleRequest(request, response) {
 
   if (request.method === Method.PUT) {
     request.on('data', function(data) {
-      fs.exists(PUBLIC_DIR + uri, function(exists) {
+      fs.exists(ELEMENT_DIR + uri, function(exists) {
         if (exists) {
           var parsedData = querystring.parse(data.toString());
+          var keys = Object.keys(DataKey);
+          for (var i = 0; i < keys.length; i++) {
+            if (!(keys[i] in parsedData)) {
+              writeFileFail(response);
+              response.end();
+
+            }
+          }
+
           var header = createHTMLHeader(parsedData.elementName);
-          var body = createHTMLBody(parsedData.elementName,parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
+          var body = createHTMLBody(parsedData.elementName, parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
           var newHTML = createHTML(header, body);
           var buffer = new Buffer(newHTML);
 
-          fs.open(PUBLIC_DIR + uri, 'w+', function(err, fd) {
+          fs.open(ELEMENT_DIR + uri, 'w+', function(err, fd) {
 
             fs.write(fd, buffer, 0, buffer.length, null, function(err) {
               if (err) throw err;
 
               fs.close(fd, function() {
-                console.log('done writing');
+                console.log('done writing to ' + ELEMENT_DIR + uri);
+
+                response.end();
               });
             });
 
           });
+        } else {
+          console.log('no data');
+          response.end();
         }
       });
 
@@ -143,7 +157,7 @@ function renderHomepage(postData) {
   var indexHTMLHeader = createIndexHeader();
   var newPeriodicElement = '<li><a href="/elements/' + postData.filename + '">' + postData.elementName + '</li>';
   PeriodicElements[postData.filename] = newPeriodicElement;
-  savePeriodicTable(PeriodicElements);
+  savePeriodicTable();
   var indexHTMLBody = createIndexBody(newPeriodicElement);
   var newIndexHTML = indexHTMLHeader + indexHTMLBody;
   var buffer = new Buffer(newIndexHTML);
@@ -169,15 +183,20 @@ function writeFileSuccess(response) {
     'Content-Type': 'text/html'
   });
   response.write('success:true');
+}
 
-
+function writeFileFail(response) {
+  response.writeHead(500, {
+    'Content-Type': 'application/json'
+  });
+  response.write('success:error');
 }
 
 function generatePOSTData(data) {
   var postData = querystring.parse(data.toString());
-  //Validates POST input.  If none match postDataKey, throw error
+  //Validates POST input.  If none match DataKey, throw error
   var counter = 0;
-  for (var key in postDataKey) {
+  for (var key in DataKey) {
     if (Object.keys(postData)[counter] !== key) {
       throw new TypeError('Invalid POST Request');
     }
@@ -201,7 +220,6 @@ function createHTMLHeader(elementName) {
 }
 
 function createHTMLBody(elementName, elementSymbol, elementAtomicNumber, elementDescription) {
-   console.log('elementName',elementName); 
   var body = '<body>\
   <h1>' + elementName + '</h1>\
   <h2>' + elementSymbol + '</h2>\
@@ -235,7 +253,7 @@ function createIndexHeader() {
 <body>\
   <h1>The Elements</h1>\
   <h2>These are all the known elements.</h2>\
-  <h3>These are ' + ELEMENT_COUNT++ + '</h3>\
+  <h3>There are ' + ELEMENT_COUNT++ + ' elements</h3>\
   <ol>';
 
   return header;
@@ -247,8 +265,6 @@ function createIndexBody(newElement) {
   var preExistingElements = '';
   var body = '<li><a href ="/hydrogen.html">Hydrogen</a></li>' +
     '<li><a href="/helium.html"> Helium </a></li>';
-
-
 
   var endBody = '</body>\
   </html>';
@@ -262,7 +278,7 @@ function createIndexBody(newElement) {
 
 }
 
-function savePeriodicTable(table) {
+function savePeriodicTable() {
   fs.open('PeriodicTable.js', 'w+', function(err, fd) {
     var toBuffer = 'module.exports.PeriodicElements =' + JSON.stringify(PeriodicElements);
     var buffer = new Buffer(toBuffer);
