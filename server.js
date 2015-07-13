@@ -3,7 +3,7 @@ var HTTP_PAGE_404 = './public/404.html';
 var fs = require('fs');
 var querystring = require('querystring');
 var PORT = 8080;
-var PeriodicElements = {};
+var PeriodicElements = require('./PeriodicTable.js');
 var Method = {
   GET: 'GET',
   POST: 'POST',
@@ -143,6 +143,7 @@ function renderHomepage(postData) {
   var indexHTMLHeader = createIndexHeader();
   var newPeriodicElement = '<li><a href="/elements/' + postData.filename + '">' + postData.elementName + '</li>';
   PeriodicElements[postData.filename] = newPeriodicElement;
+  savePeriodicTable(PeriodicElements);
   // console.log('PeriodicElements', PeriodicElements);
   var indexHTMLBody = createIndexBody(newPeriodicElement);
   var newIndexHTML = indexHTMLHeader + indexHTMLBody;
@@ -225,7 +226,7 @@ function createHTML(header, body) {
 
 function createIndexHeader() {
   var header = '<!DOCTYPE html>\
-<html lang="en">\
+<html lang="en">\savePeriodicTablesavePeriodicTable
 <head>\
   <meta charset="UTF-8">\
   <title>The Elements</title>\
@@ -258,6 +259,23 @@ function createIndexBody(newElement) {
   }
   body = body + preExistingElements + endBody;
   return body;
+
+}
+
+function savePeriodicTable`(table) {
+  fs.open('PeriodicTable.js', 'w+', function(err, fd) {
+    console.log(fd);
+
+    fs.write(fd, buffer, 0, buffer.length, null, function(err) {
+      if (err) throw err;
+
+      fs.close(fd, function() {
+        console.log('done writing');
+      });
+    });
+
+  });
+
 
 }
 

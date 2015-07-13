@@ -1,0 +1,7 @@
+exports.PeriodicTable = {
+
+key :'value'
+
+
+  
+}
