@@ -3,6 +3,9 @@ var HTTP_PAGE_404 = './public/404.html';
 var HTTP_ERR_CODE_404 = 404;
 var fs = require('fs');
 var querystring = require('querystring');
+var DATA = 'data';
+var PeriodicTable = './PeriodicTable.json';
+var HOMEPAGE = 'index.html'
 var PORT = 8080;
 var Method = {
   GET: 'GET',
@@ -13,7 +16,6 @@ var Method = {
 }
 var PUBLIC_DIR = './public/';
 var ELEMENT_DIR = './public/elements/';
-// var ELEMENT_COUNT = (2 + Object.keys(PeriodicElements).length) || 2;
 var ERR_NO_FILE_FOUND = 'no file found';
 var ERR_INVALID_PUT_KEY = 'invalid put key';
 var ERR_INVALID_DELETE_KEY = 'invalid delete key';
@@ -31,9 +33,8 @@ var server = http.createServer(handleRequest);
 function handleRequest(request, response) {
   var uri = request.url;
   if (uri === '/') {
-    uri = 'index.html';
+    uri = HOMEPAGE;
   }
-  console.log('request.method', request.method);
   switch (request.method) {
     case Method.GET:
     case Method.HEAD:
@@ -41,26 +42,14 @@ function handleRequest(request, response) {
       break;
 
     case Method.POST:
-      request.on('data', function(data) {
+      request.on(DATA, function(data) {
         sendPostResponse(response, data, uri);
       });
       break;
 
     case Method.PUT:
-      request.on('data', function(data) {
-        fs.exists(ELEMENT_DIR + uri, function(exists) {
-          if (exists) {
-            if (validatePutRequest(parsedData, response, uri)) {
-              sendPutResponse(response, parsedData, uri);
-            } else {
-              writeFileFail(response, ERR_INVALID_PUT_KEY, uri);
-              response.end();
-            }
-          } else {
-            writeFileFail(response, ERR_NO_FILE_FOUND, uri);
-            response.end();
-          }
-        });
+      request.on(DATA, function(data) {
+        sendPutResponse(response, data, uri);
       });
       break;
 
@@ -71,10 +60,6 @@ function handleRequest(request, response) {
 
 }
 
-/**
- * Create an HTML template that could be easily dynamic.
- * 
- */
 function sendGetResponse(response, uri) {
   fs.readFile(PUBLIC_DIR + uri, function(err, data) {
     if (err) throw err;
@@ -83,24 +68,89 @@ function sendGetResponse(response, uri) {
   });
 }
 
-function sendHTTP404(response, uri) {
-  fs.readFile(HTTP_PAGE_404, function(err, data) {
-    response.writeHead(HTTP_ERR_CODE_404);
-    response.write(data);
-    response.end();
+function sendPostResponse(response, data, uri) {
+  fs.exists(ELEMENT_DIR + data.filename, function(exists) {
+    if (!exists) {
+      var postData = generatePOSTData(data);
+      var newHTML = createHTML(postData);
+      fs.writeFile(ELEMENT_DIR + postData.filename, newHTML, function(err) {
+        if (err) throw err;
+        writeFileSuccess(response);
+        savePeriodicTable(postData.filename, postData.elementName);
+        renderHomepage();
+        response.end();
+      });
+
+    } else {
+      writeFileFail(response, ERR_DUPLICATE_FILE, uri);
+    }
+  });
+
+}
+
+function sendPutResponse(response, data, uri) {
+  fs.exists(ELEMENT_DIR + uri, function(exists) {
+    if (exists) {
+      if (validatePutRequest(data)) {
+        var parsedData = generatePOSTData(data);
+        var header = createHTMLHeader(parsedData.elementName);
+        var body = createHTMLBody(parsedData.elementName, parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
+        var newHTML = createHTML(header, body);
+
+        var buffer = new Buffer(newHTML);
+
+        fs.open(ELEMENT_DIR + uri, 'w+', function(err, fd) {
+
+          fs.write(fd, buffer, 0, buffer.length, null, function(err) {
+            if (err) throw err;
+
+            writeFileSuccess(response);
+            fs.close(fd, function() {
+
+              console.log('done writing to ' + ELEMENT_DIR + uri);
+              response.end();
+            });
+          });
+
+        });
+
+      } else {
+        writeFileFail(response, ERR_INVALID_PUT_KEY, uri);
+
+      }
+    } else {
+      writeFileFail(response, ERR_NO_FILE_FOUND, uri);
+
+    }
+  });
+
+}
+
+function sendDeleteResponse(request, response) {
+  var uri = request.url;
+
+  fs.exists(ELEMENT_DIR + uri, function(exists) {
+    if (exists) {
+      fs.unlink(ELEMENT_DIR + uri, function(err) {
+        writeFileSuccess(response);
+        deletePeriodicTable(uri);
+        renderHomepage();
+        response.end();
+      });
+    } else {
+      writeFileFail(response, ERR_NO_FILE_FOUND, uri);
+    }
   });
 }
+
 
 function renderHomepage() {
   var indexHTMLHeader = createIndexHeader();
   var indexHTMLBody = createIndexBody();
   var newIndexHTML = indexHTMLHeader + indexHTMLBody;
   var buffer = new Buffer(newIndexHTML);
-  // fs.readFile(PUBLIC_DIR+'index.html',function(err,data){
-  //    console.log('data.toString()',data.toString()); 
-  // });
 
-  fs.open(PUBLIC_DIR + 'index.html', 'w+', function(err, fd) {
+  fs.open(PUBLIC_DIR + HOMEPAGE, 'w+', function(err, fd) {
 
     fs.write(fd, buffer, 0, buffer.length, null, function(err) {
       if (err) throw err;
@@ -113,13 +163,14 @@ function renderHomepage() {
   });
 }
 
-function validatePutRequest(parsedData, response, uri) {
-  var keys = Object.keys(DataKey);
-
-  for (var i = 0; i < keys.length; i++) {
-    if (!(keys[i] in parsedData)) {
+function validatePutRequest(data) {
+  var postData = querystring.parse(data.toString());
+  var counter = 0;
+  for (var key in DataKey) {
+    if (Object.keys(postData)[counter] !== key) {
       return false;
     }
+    counter++;
   }
   return true;
 }
@@ -164,22 +215,14 @@ function writeFileFail(response, code, uri) {
       break;
   }
   response.write(JSON.stringify(res));
+  response.end();
+
 }
 
 function generatePOSTData(data) {
   var postData = querystring.parse(data.toString());
-  //Validates POST input.  If none match DataKey, throw error
-  var counter = 0;
-  for (var key in DataKey) {
-    if (Object.keys(postData)[counter] !== key) {
-      throw new TypeError('Invalid POST Request');
-    }
-    counter++;
-  }
   postData.filename = postData.elementName + '.html';
-
   return postData;
-
 }
 
 
@@ -204,19 +247,18 @@ function createHTMLBody(elementName, elementSymbol, elementAtomicNumber, element
   return body;
 }
 
-function createHTML(header, body) {
+function createHTML(postData) {
   var generatedHTML = '<!DOCTYPE html>\
-  ' + header + '\
-  ' + body + '\
+  ' + createHTMLHeader(postData.elementName) + '\
+  ' + createHTMLBody(postData.elementName,postData.elementSymbol,postData.elementAtomicNumber,postData.elementDescription) + '\
 <html lang="en">\
  </html>\
   ';
-
   return generatedHTML;
-
 }
 
 function createIndexHeader() {
+  var length = Object.keys(JSON.parse(fs.readFileSync(PeriodicTable, 'utf8'))).length;
   var header = '<!DOCTYPE html>\
 <html lang="en">\
 <head>\
@@ -227,7 +269,7 @@ function createIndexHeader() {
 <body>\
   <h1>The Elements</h1>\
   <h2>These are all the known elements.</h2>\
-  <h3>There are ' + '2' + ' elements</h3>\
+  <h3>There are ' + length + ' elements</h3>\
   <ol>';
 
   return header;
@@ -241,7 +283,7 @@ function createIndexBody() {
   var endBody = '</body>\
   </html>';
 
-  var periodicTable = fs.readFileSync('./PeriodicTable.json', 'utf8')
+  var periodicTable = fs.readFileSync(PeriodicTable, 'utf8')
   if (periodicTable) {
     parsedJSON = JSON.parse(periodicTable);
   }
@@ -257,7 +299,7 @@ function createIndexBody() {
 
 function deletePeriodicTable(uri) {
   var preExistingElements = {};
-  var preExistingTable = fs.readFileSync('./PeriodicTable.json', 'utf8');
+  var preExistingTable = fs.readFileSync(PeriodicTable, 'utf8');
   var parsedJSON = JSON.parse(preExistingTable);
   for (var key in parsedJSON) {
     if (key !== uri.replace('/', '')) {
@@ -265,7 +307,7 @@ function deletePeriodicTable(uri) {
     }
   }
   var convert = JSON.stringify(preExistingElements);
-  var fd = fs.openSync('./PeriodicTable.json', 'w+');
+  var fd = fs.openSync(PeriodicTable, 'w+');
   fs.writeSync(fd, convert, function(err) {
     if (err) throw err;
   });
@@ -274,87 +316,29 @@ function deletePeriodicTable(uri) {
 
 function savePeriodicTable(filename, element) {
   var newPeriodicElement = '<li><a href="/elements/' + filename + '">' + element + '</li>';
+
   var preExistingElements = {};
-
-  var preExistingTable = fs.readFileSync('./PeriodicTable.json', 'utf8');
-
-  var preExistingTable = JSON.parse(preExistingTable);
+  var preExistingTable = fs.readFileSync(PeriodicTable, 'utf8');
+  preExistingTable = JSON.parse(preExistingTable);
   for (var key in preExistingTable) {
     preExistingElements[key] = preExistingTable[key];
   }
   preExistingElements[filename] = newPeriodicElement;
   var convert = JSON.stringify(preExistingElements);
-  var fd = fs.openSync('./PeriodicTable.json', 'w+');
+  var fd = fs.openSync(PeriodicTable, 'w+');
   fs.writeSync(fd, convert, function(err) {
     if (err) throw err;
   });
 
 }
 
-function sendPostResponse(response, data, uri) {
-  var postData = generatePOSTData(data);
-  var header = createHTMLHeader(postData.elementName);
-  var body = createHTMLBody(postData.elementName, postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
-  var newHTML = createHTML(header, body);
-  fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
-    if (!exists) {
-      fs.writeFile(ELEMENT_DIR + postData.filename, newHTML, function(err) {
-        if (err) throw err;
-        writeFileSuccess(response);
-        savePeriodicTable(postData.filename,postData.elementName);
-        renderHomepage();
-        response.end();
-      });
-
-    } else {
-      writeFileFail(response, ERR_DUPLICATE_FILE, uri);
-      response.end();
-    }
-  });
-
-}
-
-function sendPutResponse(response, parsedData, uri) {
-  var header = createHTMLHeader(parsedData.elementName);
-  var body = createHTMLBody(parsedData.elementName, parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
-  var newHTML = createHTML(header, body);
-
-  var buffer = new Buffer(newHTML);
-
-  fs.open(ELEMENT_DIR + uri, 'w+', function(err, fd) {
-
-    fs.write(fd, buffer, 0, buffer.length, null, function(err) {
-      if (err) throw err;
-
-      writeFileSuccess(response);
-      fs.close(fd, function() {
-
-        console.log('done writing to ' + ELEMENT_DIR + uri);
-        response.end();
-      });
-    });
-
+function sendHTTP404(response) {
+  fs.readFile(HTTP_PAGE_404, function(err, data) {
+    response.writeHead(HTTP_ERR_CODE_404);
+    response.write(data);
+    response.end();
   });
 }
-
-function sendDeleteResponse(request, response) {
-  var uri = request.url;
-
-  fs.exists(ELEMENT_DIR + uri, function(exists) {
-    if (exists) {
-      fs.unlink(ELEMENT_DIR + uri, function(err) {
-        writeFileSuccess(response);
-        deletePeriodicTable(uri);
-        renderHomepage();
-        response.end();
-      });
-    } else {
-      writeFileFail(response, ERR_NO_FILE_FOUND, uri);
-      response.end();
-    }
-  });
-}
-
 
 
 server.listen(PORT);
