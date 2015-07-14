@@ -15,7 +15,8 @@ var PUBLIC_DIR = './public/';
 var ELEMENT_DIR = './public/elements/';
 var ELEMENT_COUNT = (2 + Object.keys(PeriodicElements).length) || 2;
 var ERR_NO_FILE_FOUND = 'no file found';
-var ERR_INVALID_PUT_KEY = 'invalid put key'
+var ERR_INVALID_PUT_KEY = 'invalid put key';
+var ERR_INVALID_DELETE_KEY = 'invalid delete key';
 var DataKey = {
   elementName: '',
   elementSymbol: '',
@@ -78,31 +79,8 @@ function handleRequest(request, response) {
      * 
      */
     request.on('data', function(data) {
-
-      var postData = generatePOSTData(data);
-      var header = createHTMLHeader(postData.elementName);
-      var body = createHTMLBody(postData.elementName, postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
-      var newHTML = createHTML(header, body);
-      fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
-        if (!exists) {
-          fs.writeFile(ELEMENT_DIR + postData.filename, newHTML, function(err) {
-            if (err) {
-              response.write('err');
-              response.end();
-            } else {
-              writeFileSuccess(response);
-              renderHomepage(postData);
-              response.end();
-            }
-
-          });
-
-        }
-      });
-
+      sendPostResponse(response, data);
     });
-
-
   }
 
   if (request.method === Method.PUT) {
@@ -110,44 +88,60 @@ function handleRequest(request, response) {
       fs.exists(ELEMENT_DIR + uri, function(exists) {
         if (exists) {
           var parsedData = querystring.parse(data.toString());
-          var keys = Object.keys(DataKey);
-          for (var i = 0; i < keys.length; i++) {
-            if (!(keys[i] in parsedData)) {
-              writeFileFail(response, ERR_INVALID_PUT_KEY, uri);
-              response.end();
-              return;
 
-            }
-          }
+          if (!validatePutRequest(parsedData, response, uri)) {
+            writeFileFail(response, ERR_INVALID_PUT_KEY, uri);
+            response.end();
+          } else {
+            var header = createHTMLHeader(parsedData.elementName);
+            var body = createHTMLBody(parsedData.elementName, parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
+            var newHTML = createHTML(header, body);
 
-          var header = createHTMLHeader(parsedData.elementName);
-          var body = createHTMLBody(parsedData.elementName, parsedData.elementSymbol, parsedData.elementAtomicNumber, parsedData.elementDescription);
-          var newHTML = createHTML(header, body);
-          var buffer = new Buffer(newHTML);
+            var buffer = new Buffer(newHTML);
 
-          fs.open(ELEMENT_DIR + uri, 'w+', function(err, fd) {
+            fs.open(ELEMENT_DIR + uri, 'w+', function(err, fd) {
 
-            fs.write(fd, buffer, 0, buffer.length, null, function(err) {
-              if (err) throw err;
+              fs.write(fd, buffer, 0, buffer.length, null, function(err) {
+                if (err) throw err;
 
-              fs.close(fd, function() {
                 writeFileSuccess(response);
-                console.log('done writing to ' + ELEMENT_DIR + uri);
+                fs.close(fd, function() {
 
-                response.end();
+                  console.log('done writing to ' + ELEMENT_DIR + uri);
+                  response.end();
+                });
               });
-            });
 
-          });
+            });
+          }
         } else {
           writeFileFail(response, ERR_NO_FILE_FOUND, uri);
           response.end();
         }
       });
-
-
-
     });
+  }
+
+  if (request.method === Method.DELETE) {
+    if (!request.headers.elementdelete) {
+      writeFileFail(response, ERR_INVALID_DELETE_KEY);
+      response.end();
+    }
+
+    var uri = request.headers.elementdelete;
+    fs.exists(ELEMENT_DIR + uri, function(exists) {
+      if (exists) {
+        fs.unlink(ELEMENT_DIR + uri, function(err) {
+          writeFileSuccess(response);
+          response.end();
+        });
+
+      } else {
+        writeFileFail(response, ERR_NO_FILE_FOUND, uri);
+        response.end();
+      }
+    });
+
   }
 
 }
@@ -181,6 +175,17 @@ function renderHomepage(postData) {
   });
 }
 
+function validatePutRequest(parsedData, response, uri) {
+  var keys = Object.keys(DataKey);
+
+  for (var i = 0; i < keys.length; i++) {
+    if (!(keys[i] in parsedData)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function writeFileSuccess(response) {
   response.writeHead(200, {
     'Content-Type': 'application/json'
@@ -188,7 +193,6 @@ function writeFileSuccess(response) {
   var res = {
     success: true
   }
-
   response.write(JSON.stringify(res));
 }
 
@@ -210,6 +214,11 @@ function writeFileFail(response, code, uri) {
         error: uri + ' was not found'
       }
       break;
+
+    case ERR_INVALID_DELETE_KEY:
+      res = {
+        error: 'Delete request must contain a URI key'
+      }
 
   }
   response.write(JSON.stringify(res));
@@ -318,5 +327,28 @@ function savePeriodicTable() {
 
 }
 
+function sendPostResponse(response, data) {
+  var postData = generatePOSTData(data);
+  var header = createHTMLHeader(postData.elementName);
+  var body = createHTMLBody(postData.elementName, postData.elementSymbol, postData.elementAtomicNumber, postData.elementDescription);
+  var newHTML = createHTML(header, body);
+  fs.exists(ELEMENT_DIR + postData.filename, function(exists) {
+    if (!exists) {
+      fs.writeFile(ELEMENT_DIR + postData.filename, newHTML, function(err) {
+        if (err) {
+          response.write('err');
+          response.end();
+        } else {
+          writeFileSuccess(response);
+          renderHomepage(postData);
+          response.end();
+        }
+
+      });
+
+    }
+  });
+
+}
 
 server.listen(PORT);
