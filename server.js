@@ -65,8 +65,8 @@ function handleRequest(request, response) {
       break;
 
     case Method.DELETE:
-      deletePeriodicTable();
-      sendDeleteResponse(request, response);
+      deletePeriodicTable(uri);
+      // sendDeleteResponse(request, response);
       break;
   }
 
@@ -258,27 +258,38 @@ function createIndexBody(newElement) {
   return body;
 }
 
-function deletePeriodicTable(filename,element){
+function deletePeriodicTable(uri) {
   var preExistingElements = {};
-
+  var preExistingTable = fs.readFileSync('./PeriodicTable.json', 'utf8');
+  var parsedJSON = JSON.parse(preExistingTable);
+  for (var key in parsedJSON) {
+    if (key !== uri.replace('/', '')) {
+      preExistingElements[key] = parsedJSON[key];
+    }
+  }
+  var convert = JSON.stringify(preExistingElements);
+  var fd = fs.openSync('./PeriodicTable.json', 'w+');
+  fs.writeSync(fd, convert, function(err) {
+    if (err) throw err;
+  });
 
 }
 
 function savePeriodicTable(filename, element) {
   var preExistingElements = {};
-  var preExistingTable = fs.readFileSync('./PeriodicTable.json','utf8');
+  var preExistingTable = fs.readFileSync('./PeriodicTable.json', 'utf8');
 
   var preExistingTable = JSON.parse(preExistingTable);
-  for(var key in preExistingTable){
+  for (var key in preExistingTable) {
     preExistingElements[key] = preExistingTable[key];
   }
   preExistingElements[filename] = element;
   var convert = JSON.stringify(preExistingElements);
-  var fd = fs.openSync('./PeriodicTable.json','w+');
-  fs.writeSync(fd,convert,function(err){
-    if ( err ) throw err;
+  var fd = fs.openSync('./PeriodicTable.json', 'w+');
+  fs.writeSync(fd, convert, function(err) {
+    if (err) throw err;
   });
- 
+
 }
 
 function sendPostResponse(response, data, uri) {
@@ -333,7 +344,7 @@ function sendDeleteResponse(request, response) {
     if (exists) {
       fs.unlink(ELEMENT_DIR + uri, function(err) {
         writeFileSuccess(response);
-        var fd = fs.openSync('./PeriodicTable.json','w+');
+        var fd = fs.openSync('./PeriodicTable.json', 'w+');
 
         response.end();
       });
