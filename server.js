@@ -65,8 +65,7 @@ function handleRequest(request, response) {
       break;
 
     case Method.DELETE:
-      deletePeriodicTable(uri);
-      // sendDeleteResponse(request, response);
+      sendDeleteResponse(request, response);
       break;
   }
 
@@ -92,11 +91,9 @@ function sendHTTP404(response, uri) {
   });
 }
 
-function renderHomepage(postData) {
+function renderHomepage() {
   var indexHTMLHeader = createIndexHeader();
-  var newPeriodicElement = '<li><a href="/elements/' + postData.filename + '">' + postData.elementName + '</li>';
-  savePeriodicTable(postData.filename, newPeriodicElement);
-  var indexHTMLBody = createIndexBody(newPeriodicElement);
+  var indexHTMLBody = createIndexBody();
   var newIndexHTML = indexHTMLHeader + indexHTMLBody;
   var buffer = new Buffer(newIndexHTML);
   // fs.readFile(PUBLIC_DIR+'index.html',function(err,data){
@@ -237,7 +234,7 @@ function createIndexHeader() {
 
 }
 
-function createIndexBody(newElement) {
+function createIndexBody() {
 
   var preExistingElements = '';
 
@@ -276,14 +273,16 @@ function deletePeriodicTable(uri) {
 }
 
 function savePeriodicTable(filename, element) {
+  var newPeriodicElement = '<li><a href="/elements/' + filename + '">' + element + '</li>';
   var preExistingElements = {};
+
   var preExistingTable = fs.readFileSync('./PeriodicTable.json', 'utf8');
 
   var preExistingTable = JSON.parse(preExistingTable);
   for (var key in preExistingTable) {
     preExistingElements[key] = preExistingTable[key];
   }
-  preExistingElements[filename] = element;
+  preExistingElements[filename] = newPeriodicElement;
   var convert = JSON.stringify(preExistingElements);
   var fd = fs.openSync('./PeriodicTable.json', 'w+');
   fs.writeSync(fd, convert, function(err) {
@@ -302,8 +301,8 @@ function sendPostResponse(response, data, uri) {
       fs.writeFile(ELEMENT_DIR + postData.filename, newHTML, function(err) {
         if (err) throw err;
         writeFileSuccess(response);
-        renderHomepage(postData);
-        console.log('in');
+        savePeriodicTable(postData.filename,postData.elementName);
+        renderHomepage();
         response.end();
       });
 
@@ -340,12 +339,13 @@ function sendPutResponse(response, parsedData, uri) {
 
 function sendDeleteResponse(request, response) {
   var uri = request.url;
+
   fs.exists(ELEMENT_DIR + uri, function(exists) {
     if (exists) {
       fs.unlink(ELEMENT_DIR + uri, function(err) {
         writeFileSuccess(response);
-        var fd = fs.openSync('./PeriodicTable.json', 'w+');
-
+        deletePeriodicTable(uri);
+        renderHomepage();
         response.end();
       });
     } else {
@@ -354,5 +354,7 @@ function sendDeleteResponse(request, response) {
     }
   });
 }
+
+
 
 server.listen(PORT);
